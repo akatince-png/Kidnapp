@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Arcanova</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+  :root {
+    --bg-deep: #211a3f; --bg-mid: #322a5c;
+    --accent: #7c5cff; --accent-bright: #a78bfa;
+    --star: #ffd166; --good: #4ade80; --danger: #f87171;
+    --card-bg: #ffffff; --text-dark: #2a2140; --text-muted: #6b6285;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background: radial-gradient(ellipse at top, var(--bg-mid), var(--bg-deep)); color:var(--text-dark); overscroll-behavior:none; }
+  #app { max-width:480px; margin:0 auto; min-height:100vh; display:flex; flex-direction:column; }
+  .screen { display:none; flex:1; flex-direction:column; padding:18px; padding-bottom:36px; animation:fadeIn .2s ease; }
+  .screen.active { display:flex; }
+  @keyframes fadeIn { from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:translateY(0)} }
+
+  h1,h2,h3 { margin:0 0 8px 0; color:#fff; }
+  h3.dark, h4.dark { color: var(--text-dark); margin: 0 0 8px; }
+  p { margin:0 0 10px 0; }
+  .muted { color: var(--text-muted); font-size: 13px; }
+  .muted-light { color: rgba(255,255,255,0.7); font-size: 13px; }
+
+  .card { background:var(--card-bg); border-radius:var(--radius); padding:18px; box-shadow:0 8px 24px rgba(0,0,0,0.22); margin-bottom:14px; }
+
+  button { font-family:inherit; border:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  .btn-primary { background:linear-gradient(135deg,var(--accent-bright),var(--accent)); color:#fff; font-size:16px; font-weight:800;
+    padding:15px 18px; border-radius:14px; width:100%; box-shadow:0 6px 14px rgba(124,92,255,0.35); }
+  .btn-primary:active { transform:scale(0.97); }
+  .btn-primary:disabled { opacity:0.4; }
+  .btn-secondary { background:#f2eeff; color:var(--accent); font-weight:700; font-size:14px; padding:11px 16px; border-radius:12px; }
+  .btn-ghost { background:transparent; color:rgba(255,255,255,0.65); font-size:13px; padding:8px; text-decoration:underline; }
+  .btn-danger { background:#fef0f0; color:var(--danger); font-weight:700; font-size:13px; padding:8px 12px; border-radius:10px; }
+  .btn-icon { background:#f2eeff; color:var(--text-dark); font-weight:700; font-size:15px; width:32px; height:32px; border-radius:8px; }
+
+  input[type="text"], input[type="number"], input[type="password"] { width:100%; font-size:16px; padding:12px 14px; border-radius:12px;
+    border:2px solid #e2ddf5; margin-bottom:12px; font-family:inherit; }
+  input:focus { outline:none; border-color:var(--accent); }
+  label.field-label { display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.03em; }
+
+  .top-bar { display:flex; justify-content:space-between; align-items:center; padding:2px 2px 14px; color:#fff; }
+  .sternenenergie-badge { background:rgba(255,209,102,0.18); border:1px solid rgba(255,209,102,0.4); border-radius:999px;
+    padding:7px 13px; font-weight:800; color:var(--star); font-size:14px; }
+  .back-link { color:rgba(255,255,255,0.8); font-size:14px; font-weight:700; padding:6px 0 14px; display:inline-block; }
+
+  .altersgruppen-wahl { display:flex; gap:10px; margin-bottom: 14px; }
+  .alter-option { flex:1; background:#fff; border-radius:16px; padding:16px 8px; text-align:center; border:3px solid transparent; font-weight:700; font-size:14px; }
+  .alter-option.selected { border-color:var(--accent); background:#f2eeff; }
+  .alter-option .emoji { font-size:32px; display:block; margin-bottom:6px; }
+
+  .block-karte { background:#fff; border-radius:18px; padding:16px; display:flex; align-items:center; gap:14px; margin-bottom:12px; text-align:left; width:100%; }
+  .block-karte .icon { font-size:30px; }
+  .block-karte .info { flex:1; }
+  .block-karte .name { font-weight:800; font-size:15px; color:var(--text-dark); }
+  .block-karte .status { font-size:12.5px; color:var(--text-muted); margin-top:2px; }
+  .block-karte .status.fertig { color:var(--good); font-weight:700; }
+  .block-karte .pfeil { color:var(--text-muted); font-size:18px; }
+  .block-karte.gesperrt { opacity:0.7; }
+  .fortschritt-mini { height:6px; background:#eee; border-radius:999px; overflow:hidden; margin-top:6px; width: 100%; }
+  .fortschritt-mini-fuellung { height:100%; background:var(--accent); border-radius:999px; }
+
+  .routine-liste { display:flex; flex-direction:column; gap:10px; }
+  .routine-punkt { background:#fff; border-radius:14px; padding:14px 16px; display:flex; align-items:center; gap:12px; width:100%; text-align:left; }
+  .routine-punkt.erledigt { background:#eefbf1; }
+  .routine-punkt .icon { font-size:24px; }
+  .routine-punkt .label { flex:1; font-weight:700; font-size:15px; }
+  .routine-punkt.erledigt .label { text-decoration: line-through; color: var(--text-muted); }
+  .routine-punkt .haken { font-size:20px; color:var(--good); }
+
+  .timer-anzeige { text-align:center; font-size:15px; font-weight:800; color:#fff; background:rgba(255,255,255,0.1);
+    border-radius:999px; padding:8px 16px; margin:0 auto 14px; width:fit-content; }
+
+  .editor-liste { display:flex; flex-direction:column; gap:8px; margin-bottom: 14px; }
+  .editor-zeile { display:flex; align-items:center; gap:8px; background:#f8f6ff; border-radius:12px; padding:8px 10px; }
+  .editor-zeile input[type="text"], .editor-zeile input[type="number"] { margin-bottom:0; padding:8px 10px; font-size:14px; }
+  .editor-zeile .reorder { display:flex; flex-direction:column; gap:2px; }
+  .editor-zeile .reorder button { background:none; font-size:11px; color:var(--text-muted); padding:1px 4px; }
+  .editor-zeile .emoji-feld { width:44px; text-align:center; flex-shrink:0; }
+  .editor-zeile .name-feld { flex:1; min-width:0; }
+  .editor-zeile .zahl-feld { width:58px; flex-shrink:0; }
+
+  .tab-leiste { display:flex; gap:6px; overflow-x:auto; margin-bottom:14px; padding-bottom:2px; }
+  .tab-btn { flex-shrink:0; background:rgba(255,255,255,0.12); color:rgba(255,255,255,0.75); font-size:12.5px; font-weight:700;
+    padding:8px 12px; border-radius:999px; white-space:nowrap; }
+  .tab-btn.active { background:#fff; color:var(--accent); }
+
+  .app-kachel-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .app-kachel { background:#fff; border-radius:16px; padding:18px 8px; text-align:center; }
+  .app-kachel .emoji { font-size:36px; display:block; margin-bottom:6px; }
+  .app-kachel .name { font-weight:700; font-size:13px; color:var(--text-dark); }
+
+  .verlauf-eintrag { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:13px; }
+  .verlauf-eintrag:last-child { border-bottom:none; }
+
+  .reaktion-screen { text-align:center; }
+  .stern-gewinn { font-size:20px; font-weight:800; color:var(--star); margin:10px 0 18px; }
+  .kleingedrucktes { text-align:center; color:rgba(255,255,255,0.35); font-size:11px; margin-top:auto; padding-top:18px; }
+  .hinweis-box { background:rgba(255,255,255,0.08); border-radius:14px; padding:14px; color:rgba(255,255,255,0.85); font-size:12.5px; line-height:1.5; margin-top:8px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ============ ONBOARDING (reduziert: nur Name + Alter) ============ -->
+  <div class="screen active" id="screen-onboarding">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <h1>Willkommen bei Arcanova</h1>
+      <p class="muted-light">Kurz einrichten, dann kann's losgehen.</p>
+      <label class="field-label" style="color:rgba(255,255,255,0.7); margin-top:10px;">Name</label>
+      <input type="text" id="input-heldenname" placeholder="Name des Kindes" maxlength="20" autocomplete="off" />
+      <label class="field-label" style="color:rgba(255,255,255,0.7);">Altersgruppe</label>
+      <div class="altersgruppen-wahl">
+        <button class="alter-option" id="alter-3-6" onclick="altersgruppeWaehlen('3-6')"><span class="emoji">🧒</span>3–6 Jahre</button>
+        <button class="alter-option" id="alter-6-9" onclick="altersgruppeWaehlen('6-9')"><span class="emoji">🧑</span>6–9 Jahre</button>
+      </div>
+      <button class="btn-primary" id="btn-onboarding-weiter" onclick="onboardingAbschliessen()" disabled>Los geht's</button>
+    </div>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <div class="screen" id="screen-home">
+    <div class="top-bar">
+      <div id="home-begruessung" style="font-weight:800; font-size:15px;"></div>
+      <div class="sternenenergie-badge">✨ <span id="home-sternenenergie">0</span></div>
+    </div>
+
+    <h3>Morgens</h3>
+    <button class="block-karte" onclick="routineOeffnen('morgen')">
+      <span class="icon">🌅</span>
+      <span class="info">
+        <span class="name">Morgenroutine</span>
+        <div class="fortschritt-mini"><div class="fortschritt-mini-fuellung" id="morgen-balken" style="width:0%"></div></div>
+        <span class="status" id="morgen-status"></span>
+      </span>
+      <span class="pfeil">›</span>
+    </button>
+
+    <h3>Lernzeit</h3>
+    <button class="block-karte" onclick="gehe('screen-workflow-liste'); workflowListeRendern();">
+      <span class="icon">📚</span>
+      <span class="info">
+        <span class="name">Lernblock</span>
+        <span class="status" id="workflow-status">Zeit zum Üben</span>
+      </span>
+      <span class="pfeil">›</span>
+    </button>
+
+    <h3>Abends</h3>
+    <button class="block-karte" onclick="routineOeffnen('abend')">
+      <span class="icon">🌙</span>
+      <span class="info">
+        <span class="name">Abendroutine</span>
+        <div class="fortschritt-mini"><div class="fortschritt-mini-fuellung" id="abend-balken" style="width:0%"></div></div>
+        <span class="status" id="abend-status"></span>
+      </span>
+      <span class="pfeil">›</span>
+    </button>
+
+    <h3>Freizeit</h3>
+    <button class="block-karte" id="freizeit-karte" onclick="freizeitOeffnen()">
+      <span class="icon" id="freizeit-icon">🎮</span>
+      <span class="info">
+        <span class="name">Spiele &amp; Freizeit</span>
+        <span class="status" id="freizeit-status"></span>
+      </span>
+      <span class="pfeil">›</span>
+    </button>
+
+    <button class="btn-ghost" style="margin-top:8px;" onclick="elternPinOeffnen()">Für Eltern</button>
+  </div>
+
+  <!-- ============ ROUTINE (Morgen/Abend, generisch) ============ -->
+  <div class="screen" id="screen-routine">
+    <a class="back-link" onclick="gehe('screen-home'); homeAktualisieren();">‹ Zurück</a>
+    <h2 id="routine-titel"></h2>
+    <div class="routine-liste" id="routine-liste"></div>
+  </div>
+
+  <!-- ============ WORKOUT ============ -->
+  <div class="screen" id="screen-workout">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center;">
+      <h2 id="workout-uebung-name">—</h2>
+      <div class="timer-anzeige" id="workout-timer">⏳ 30</div>
+      <p class="muted-light" id="workout-fortschritt-text"></p>
+      <button class="btn-secondary" onclick="workoutUebungFertig()">Fertig / Weiter →</button>
+    </div>
+  </div>
+
+  <!-- ============ WORKFLOW: LISTE ============ -->
+  <div class="screen" id="screen-workflow-liste">
+    <a class="back-link" onclick="gehe('screen-home'); homeAktualisieren();">‹ Zurück</a>
+    <h2>Lernblock</h2>
+    <p class="muted-light">Wähl aus, woran du gerade arbeitest.</p>
+    <div class="routine-liste" id="workflow-preset-liste"></div>
+  </div>
+
+  <!-- ============ WORKFLOW: LAUF ============ -->
+  <div class="screen" id="screen-workflow-lauf">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center;">
+      <h2 id="workflow-lauf-name"></h2>
+      <div class="timer-anzeige" id="workflow-lauf-timer"></div>
+      <p class="muted-light" id="workflow-lauf-phase"></p>
+      <div id="workflow-musik-hinweis"></div>
+      <button class="btn-secondary" style="margin-top:16px;" onclick="workflowAbbrechen()">Beenden</button>
+    </div>
+  </div>
+
+  <!-- ============ REAKTION (nach Routine-Punkt / Workflow / Workout) ============ -->
+  <div class="screen" id="screen-reaktion">
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;" class="reaktion-screen">
+      <h2 id="reaktion-titel"></h2>
+      <p class="muted-light" id="reaktion-text"></p>
+      <div class="stern-gewinn" id="reaktion-sterne"></div>
+      <button class="btn-primary" onclick="homeAktualisieren(); gehe('screen-home');">Weiter →</button>
+    </div>
+  </div>
+
+  <!-- ============ FREIZEIT: GESPERRT ============ -->
+  <div class="screen" id="screen-freizeit-gesperrt">
+    <a class="back-link" onclick="gehe('screen-home');">‹ Zurück</a>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center;">
+      <h2>Noch nicht ganz da 🔒</h2>
+      <p class="muted-light" id="freizeit-gesperrt-text"></p>
+      <div class="fortschritt-mini" style="margin: 10px auto; max-width: 240px;"><div class="fortschritt-mini-fuellung" id="freizeit-gesperrt-balken" style="width:0%; background:var(--star);"></div></div>
+    </div>
+  </div>
+
+  <!-- ============ FREIZEIT: OFFEN ============ -->
+  <div class="screen" id="screen-freizeit">
+    <a class="back-link" onclick="gehe('screen-home');">‹ Zurück</a>
+    <h2>Spiele &amp; Freizeit 🎉</h2>
+    <div class="app-kachel-grid" id="freizeit-app-grid"></div>
+  </div>
+
+  <!-- ============ ELTERN: PIN ============ -->
+  <div class="screen" id="screen-eltern-pin">
+    <a class="back-link" onclick="gehe('screen-home');">‹ Zurück</a>
+    <div style="flex:1; display:flex; flex-direction:column; justify-content:center;">
+      <h2>Eltern-Bereich</h2>
+      <p class="muted-light">PIN eingeben.</p>
+      <input type="password" id="input-eltern-pin" inputmode="numeric" maxlength="8" placeholder="PIN" />
+      <p id="eltern-pin-fehler" style="color: var(--danger); font-size:13px; display:none;">Falscher PIN.</p>
+      <button class="btn-primary" onclick="elternPinPruefen()">Bestätigen</button>
+    </div>
+  </div>
+
+  <!-- ============ ELTERN: DASHBOARD ============ -->
+  <div class="screen" id="screen-eltern-dashboard">
+    <a class="back-link" onclick="gehe('screen-home'); homeAktualisieren();">‹ Zurück zur App</a>
+    <h2>Eltern-Dashboard</h2>
+    <div class="tab-leiste" id="eltern-tabs"></div>
+    <div id="eltern-tab-inhalt"></div>
+  </div>
+
+  <div class="kleingedrucktes">Arcanova</div>
+</div>
+
+<script>
+/* ==========================================================================
+   ARCANOVA — Struktur-Ausbau 15.08.2026. Kernidee: funktioniert vom Prinzip
+   her wie die Erwachsenen-App (Routine-Punkte einzeln bestätigen, Workflow
+   mit Intervallen, Spotify je Bereich), nur kindgerecht zugeschnitten.
+   Charakter/Geschichte bewusst zurückgestellt (Nutzerin-Vorgabe 15.08.) —
+   nur Name + Altersgruppe als schlichte Einstellung. Freizeitbereich ist
+   über gesammelte Sternenenergie freigeschaltet.
+   ========================================================================== */
+
+const SUPABASE_URL = "https://dpjlfhxquqxmubstuyeb.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_DNJv-uhWDbOzDou8AzAw0A_BXAPCSkq";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Kein Login-System (Übergabeprotokoll-Vorgabe): feste Kind-ID.
+const CHILD_ID = "kind_1";
+
+const STERNE_PRO_PUNKT = 5;
+const STERNE_PRO_WORKFLOW_SESSION = 15;
+
+let profil = null;
+let fortschritt = { sternenenergie: 0, missionen_gesamt: 0 };
+let morgenPunkte = [];
+let abendPunkte = [];
+let workoutUebungen = [];
+let workflowPresets = [];
+let freizeitApps = [];
+let heutigeRoutineLogIds = new Set(); // punkt_id, für heute erledigt
+let heutigeWorkflowSessions = 0;
+let heuteGesammelteSterne = 0;
+
+// -------------------- Navigation --------------------
+function gehe(screenId) {
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  document.getElementById(screenId).classList.add("active");
+}
+
+// -------------------- Onboarding --------------------
+let obName = "", obAlter = null;
+document.getElementById("input-heldenname").addEventListener("input", (e) => { obName = e.target.value.trim(); obWeiterPruefen(); });
+function altersgruppeWaehlen(g) {
+  obAlter = g;
+  document.getElementById("alter-3-6").classList.toggle("selected", g === "3-6");
+  document.getElementById("alter-6-9").classList.toggle("selected", g === "6-9");
+  obWeiterPruefen();
+}
+function obWeiterPruefen() { document.getElementById("btn-onboarding-weiter").disabled = !(obName && obAlter); }
+
+async function onboardingAbschliessen() {
+  const { error } = await supabase.from("arcanova_profile").upsert({ child_id: CHILD_ID, heldenname: obName, age_group: obAlter, onboarding_done: true });
+  if (error) { alert("Speichern fehlgeschlagen: " + error.message); return; }
+  await supabase.from("arcanova_fortschritt").upsert({ child_id: CHILD_ID, sternenenergie: 0, missionen_gesamt: 0 }, { onConflict: "child_id", ignoreDuplicates: true });
+  await homeAktualisieren();
+  gehe("screen-home");
+}
+
+// -------------------- Laden --------------------
+function heuteDatum() { return new Date().toISOString().slice(0, 10); }
+
+async function allesLaden() {
+  const { data: p } = await supabase.from("arcanova_profile").select("*").eq("child_id", CHILD_ID).maybeSingle();
+  profil = p;
+  if (!profil || !profil.onboarding_done) { gehe("screen-onboarding"); return false; }
+
+  const heute = heuteDatum();
+  const [
+    { data: f }, { data: mp }, { data: ap }, { data: we }, { data: wp }, { data: fa },
+    { data: rlog }, { data: wflog },
+  ] = await Promise.all([
+    supabase.from("arcanova_fortschritt").select("*").eq("child_id", CHILD_ID).maybeSingle(),
+    supabase.from("arcanova_routine_punkte").select("*").eq("child_id", CHILD_ID).eq("routine_typ", "morgen").eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_routine_punkte").select("*").eq("child_id", CHILD_ID).eq("routine_typ", "abend").eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_workout_uebungen").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_workflow_presets").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_freizeit_apps").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_routine_log").select("punkt_id").eq("child_id", CHILD_ID).eq("datum", heute),
+    supabase.from("arcanova_workflow_log").select("id").eq("child_id", CHILD_ID).eq("datum", heute),
+  ]);
+
+  fortschritt = f || { sternenenergie: 0, missionen_gesamt: 0 };
+  morgenPunkte = mp || [];
+  abendPunkte = ap || [];
+  workoutUebungen = we || [];
+  workflowPresets = wp || [];
+  freizeitApps = fa || [];
+  heutigeRoutineLogIds = new Set((rlog || []).map(r => r.punkt_id));
+  heutigeWorkflowSessions = (wflog || []).length;
+  heuteGesammelteSterne = heutigeRoutineLogIds.size * STERNE_PRO_PUNKT + heutigeWorkflowSessions * STERNE_PRO_WORKFLOW_SESSION;
+  return true;
+}
+
+function tageszeitBegruessung() {
+  const h = new Date().getHours();
+  if (h < 6) return "Noch mitten in der Nacht";
+  if (h < 12) return "Guten Morgen";
+  if (h < 18) return "Schönen Nachmittag";
+  if (h < 22) return "Guten Abend";
+  return "Schon spät";
+}
+
+async function homeAktualisieren() {
+  const ok = await allesLaden();
+  if (!ok) return;
+  document.getElementById("home-begruessung").textContent = `${tageszeitBegruessung()}, ${profil.heldenname}!`;
+  document.getElementById("home-sternenenergie").textContent = fortschritt.sternenenergie;
+
+  const morgenErledigt = morgenPunkte.filter(p => heutigeRoutineLogIds.has(p.id)).length;
+  document.getElementById("morgen-balken").style.width = morgenPunkte.length ? Math.round((morgenErledigt / morgenPunkte.length) * 100) + "%" : "0%";
+  document.getElementById("morgen-status").textContent = morgenPunkte.length ? `${morgenErledigt}/${morgenPunkte.length} erledigt` : "Noch nichts eingerichtet";
+
+  const abendErledigt = abendPunkte.filter(p => heutigeRoutineLogIds.has(p.id)).length;
+  document.getElementById("abend-balken").style.width = abendPunkte.length ? Math.round((abendErledigt / abendPunkte.length) * 100) + "%" : "0%";
+  document.getElementById("abend-status").textContent = abendPunkte.length ? `${abendErledigt}/${abendPunkte.length} erledigt` : "Noch nichts eingerichtet";
+
+  document.getElementById("workflow-status").textContent = heutigeWorkflowSessions > 0 ? `${heutigeWorkflowSessions}x heute geübt ✓` : "Zeit zum Üben";
+
+  const schwelle = profil.freizeit_schwelle || 30;
+  const frei = heuteGesammelteSterne >= schwelle;
+  document.getElementById("freizeit-icon").textContent = frei ? "🎮" : "🔒";
+  document.getElementById("freizeit-status").textContent = frei ? "Freigeschaltet!" : `Noch ${Math.max(0, schwelle - heuteGesammelteSterne)} ✨ bis Freizeit`;
+}
+
+// -------------------- Routine (Morgen/Abend) --------------------
+let aktuelleRoutineTyp = "morgen";
+function routineOeffnen(typ) {
+  aktuelleRoutineTyp = typ;
+  document.getElementById("routine-titel").textContent = typ === "morgen" ? "🌅 Morgenroutine" : "🌙 Abendroutine";
+  routineListeRendern();
+  gehe("screen-routine");
+}
+function routineListeRendern() {
+  const punkte = aktuelleRoutineTyp === "morgen" ? morgenPunkte : abendPunkte;
+  const liste = document.getElementById("routine-liste");
+  liste.innerHTML = "";
+  if (punkte.length === 0) {
+    liste.innerHTML = '<p class="muted-light">Noch keine Punkte eingerichtet — das können Eltern im Eltern-Bereich tun.</p>';
+    return;
+  }
+  punkte.forEach(p => {
+    const erledigt = heutigeRoutineLogIds.has(p.id);
+    const btn = document.createElement("button");
+    btn.className = "routine-punkt" + (erledigt ? " erledigt" : "");
+    btn.disabled = erledigt;
+    btn.onclick = () => routinePunktTippen(p);
+    btn.innerHTML = `<span class="icon">${p.icon}</span><span class="label">${p.name}</span>${erledigt ? '<span class="haken">✓</span>' : ""}`;
+    liste.appendChild(btn);
+  });
+}
+function routinePunktTippen(punkt) {
+  if (punkt.typ === "workout") { workoutStarten(punkt); return; }
+  routinePunktAbschliessen(punkt);
+}
+async function routinePunktAbschliessen(punkt) {
+  const { error } = await supabase.from("arcanova_routine_log").insert({ child_id: CHILD_ID, punkt_id: punkt.id, datum: heuteDatum() });
+  if (error) { console.error(error); return; }
+  heutigeRoutineLogIds.add(punkt.id);
+  const neueSterne = (fortschritt.sternenenergie || 0) + STERNE_PRO_PUNKT;
+  const neueGesamt = (fortschritt.missionen_gesamt || 0) + 1;
+  await supabase.from("arcanova_fortschritt").upsert({ child_id: CHILD_ID, sternenenergie: neueSterne, missionen_gesamt: neueGesamt });
+  fortschritt.sternenenergie = neueSterne; fortschritt.missionen_gesamt = neueGesamt;
+  heuteGesammelteSterne += STERNE_PRO_PUNKT;
+  routineListeRendern();
+  const playlistLink = aktuelleRoutineTyp === "morgen" ? profil.morgen_playlist_link : profil.abend_playlist_link;
+  reaktionZeigen(`${punkt.name} — geschafft!`, "Super gemacht!", STERNE_PRO_PUNKT, () => { gehe("screen-routine"); routineListeRendern(); }, playlistLink);
+}
+function reaktionZeigen(titel, text, sterne, weiterCallback, playlistLink) {
+  document.getElementById("reaktion-titel").textContent = titel;
+  document.getElementById("reaktion-text").textContent = text;
+  document.getElementById("reaktion-sterne").textContent = `+${sterne} ✨`;
+  const weiterBtn = document.querySelector("#screen-reaktion .btn-primary");
+  weiterBtn.onclick = () => { (weiterCallback || (() => gehe("screen-home")))(); };
+  gehe("screen-reaktion");
+}
+
+// -------------------- Workout --------------------
+let workoutPunktRef = null, workoutIndex = 0, workoutTimerHandle = null, workoutRest = 0;
+function workoutStarten(punkt) {
+  if (workoutUebungen.length === 0) { alert("Noch keine Übungen eingerichtet — das können Eltern im Eltern-Bereich tun."); return; }
+  workoutPunktRef = punkt; workoutIndex = 0;
+  workoutUebungAnzeigen();
+  gehe("screen-workout");
+}
+function workoutUebungAnzeigen() {
+  clearInterval(workoutTimerHandle);
+  const u = workoutUebungen[workoutIndex];
+  document.getElementById("workout-uebung-name").textContent = u.name;
+  document.getElementById("workout-fortschritt-text").textContent = `Übung ${workoutIndex + 1} von ${workoutUebungen.length}`;
+  workoutRest = u.dauer_sek;
+  document.getElementById("workout-timer").textContent = `⏳ ${workoutRest}`;
+  workoutTimerHandle = setInterval(() => {
+    workoutRest--;
+    if (workoutRest <= 0) { workoutRest = 0; clearInterval(workoutTimerHandle); }
+    document.getElementById("workout-timer").textContent = `⏳ ${workoutRest}`;
+  }, 1000);
+}
+function workoutUebungFertig() {
+  clearInterval(workoutTimerHandle);
+  workoutIndex++;
+  if (workoutIndex < workoutUebungen.length) { workoutUebungAnzeigen(); return; }
+  routinePunktAbschliessen(workoutPunktRef);
+}
+
+// -------------------- Workflow (Lernblock) --------------------
+function workflowListeRendern() {
+  const liste = document.getElementById("workflow-preset-liste");
+  liste.innerHTML = "";
+  if (workflowPresets.length === 0) { liste.innerHTML = '<p class="muted-light">Noch keine Lernblöcke eingerichtet — das können Eltern im Eltern-Bereich tun.</p>'; return; }
+  workflowPresets.forEach(p => {
+    const btn = document.createElement("button");
+    btn.className = "routine-punkt";
+    btn.onclick = () => workflowStarten(p);
+    btn.innerHTML = `<span class="icon">📖</span><span class="label">${p.name}<br/><span class="muted" style="font-weight:400;">${p.arbeit_min} Min. Üben · ${p.pause_min} Min. Pause</span></span>`;
+    liste.appendChild(btn);
+  });
+}
+let wfPreset = null, wfPhase = "arbeit", wfRest = 0, wfRunde = 0, wfRundenZahl = 1, wfTimerHandle = null;
+function workflowStarten(preset) {
+  wfPreset = preset;
+  const arbeitSek = Math.max(60, preset.arbeit_min * 60);
+  const pauseSek = Math.max(0, preset.pause_min * 60);
+  wfRundenZahl = Math.max(1, Math.round((preset.gesamt_min * 60) / (arbeitSek + pauseSek)) || 1);
+  wfRunde = 1; wfPhase = "arbeit"; wfRest = arbeitSek;
+  document.getElementById("workflow-lauf-name").textContent = preset.name;
+  document.getElementById("workflow-musik-hinweis").innerHTML = preset.playlist_link
+    ? `<button class="btn-secondary" onclick="window.open('${preset.playlist_link}','_blank')">🎵 Musik starten</button>` : "";
+  workflowTick(true);
+  gehe("screen-workflow-lauf");
+}
+function workflowTick(erstesMal) {
+  clearInterval(wfTimerHandle);
+  const anzeigen = () => {
+    document.getElementById("workflow-lauf-timer").textContent = `⏳ ${String(Math.floor(wfRest/60)).padStart(2,"0")}:${String(wfRest%60).padStart(2,"0")}`;
+    document.getElementById("workflow-lauf-phase").textContent = `${wfPhase === "arbeit" ? "Üben" : "Pause"} · Runde ${wfRunde}/${wfRundenZahl}`;
+  };
+  anzeigen();
+  wfTimerHandle = setInterval(() => {
+    wfRest--;
+    if (wfRest <= 0) {
+      if (wfPhase === "arbeit" && wfPreset.pause_min > 0) { wfPhase = "pause"; wfRest = wfPreset.pause_min * 60; }
+      else if (wfRunde < wfRundenZahl) { wfRunde++; wfPhase = "arbeit"; wfRest = Math.max(60, wfPreset.arbeit_min * 60); }
+      else { workflowFertig(); return; }
+    }
+    anzeigen();
+  }, 1000);
+}
+async function workflowFertig() {
+  clearInterval(wfTimerHandle);
+  await supabase.from("arcanova_workflow_log").insert({ child_id: CHILD_ID, preset_id: wfPreset.id, preset_name: wfPreset.name, datum: heuteDatum() });
+  heutigeWorkflowSessions++;
+  const neueSterne = (fortschritt.sternenenergie || 0) + STERNE_PRO_WORKFLOW_SESSION;
+  await supabase.from("arcanova_fortschritt").upsert({ child_id: CHILD_ID, sternenenergie: neueSterne, missionen_gesamt: fortschritt.missionen_gesamt });
+  fortschritt.sternenenergie = neueSterne;
+  heuteGesammelteSterne += STERNE_PRO_WORKFLOW_SESSION;
+  reaktionZeigen(`${wfPreset.name} — geschafft!`, "Toll durchgehalten!", STERNE_PRO_WORKFLOW_SESSION);
+}
+function workflowAbbrechen() { clearInterval(wfTimerHandle); gehe("screen-home"); homeAktualisieren(); }
+
+// -------------------- Freizeit --------------------
+function freizeitOeffnen() {
+  const schwelle = profil.freizeit_schwelle || 30;
+  if (heuteGesammelteSterne >= schwelle) {
+    const grid = document.getElementById("freizeit-app-grid");
+    grid.innerHTML = "";
+    if (freizeitApps.length === 0) { grid.innerHTML = '<p class="muted-light">Noch keine Apps eingerichtet — das können Eltern im Eltern-Bereich tun.</p>'; }
+    freizeitApps.forEach(a => {
+      const btn = document.createElement("button");
+      btn.className = "app-kachel";
+      btn.innerHTML = `<span class="emoji">${a.icon}</span><span class="name">${a.name}</span>`;
+      btn.onclick = () => window.open(a.link, "_blank");
+      grid.appendChild(btn);
+    });
+    gehe("screen-freizeit");
+  } else {
+    document.getElementById("freizeit-gesperrt-text").textContent = `Sammle noch ${schwelle - heuteGesammelteSterne} ✨ Sternenenergie, dann geht's los! Erledige Routine-Punkte oder eine Lernrunde.`;
+    document.getElementById("freizeit-gesperrt-balken").style.width = Math.min(100, Math.round((heuteGesammelteSterne / schwelle) * 100)) + "%";
+    gehe("screen-freizeit-gesperrt");
+  }
+}
+
+// -------------------- Eltern-Bereich --------------------
+function elternPinOeffnen() { document.getElementById("input-eltern-pin").value = ""; document.getElementById("eltern-pin-fehler").style.display = "none"; gehe("screen-eltern-pin"); }
+function elternPinPruefen() {
+  const eingabe = document.getElementById("input-eltern-pin").value;
+  if (eingabe === (profil.eltern_pin || "1234")) { elternTabWechseln("profil"); gehe("screen-eltern-dashboard"); }
+  else { document.getElementById("eltern-pin-fehler").style.display = "block"; }
+}
+
+const ELTERN_TABS = [
+  { id: "profil", label: "Profil" },
+  { id: "morgen", label: "Morgenroutine" },
+  { id: "abend", label: "Abendroutine" },
+  { id: "workout", label: "Workout" },
+  { id: "workflow", label: "Lernblock" },
+  { id: "freizeit", label: "Freizeit" },
+  { id: "verlauf", label: "Verlauf" },
+];
+let elternAktiverTab = "profil";
+function elternTabsRendern() {
+  const el = document.getElementById("eltern-tabs");
+  el.innerHTML = "";
+  ELTERN_TABS.forEach(t => {
+    const btn = document.createElement("button");
+    btn.className = "tab-btn" + (elternAktiverTab === t.id ? " active" : "");
+    btn.textContent = t.label;
+    btn.onclick = () => elternTabWechseln(t.id);
+    el.appendChild(btn);
+  });
+}
+function elternTabWechseln(tabId) {
+  elternAktiverTab = tabId;
+  elternTabsRendern();
+  const inhalt = document.getElementById("eltern-tab-inhalt");
+  inhalt.innerHTML = "";
+  ({ profil: elternTabProfil, morgen: elternTabRoutine("morgen"), abend: elternTabRoutine("abend"),
+     workout: elternTabWorkout, workflow: elternTabWorkflow, freizeit: elternTabFreizeit, verlauf: elternTabVerlauf })[tabId](inhalt);
+}
+
+function elternTabProfil(container) {
+  const card = document.createElement("div"); card.className = "card";
+  card.innerHTML = `
+    <label class="field-label">Name</label>
+    <input type="text" id="ep-name" value="${profil.heldenname || ""}" />
+    <label class="field-label">Eltern-PIN</label>
+    <input type="text" id="ep-pin" inputmode="numeric" value="${profil.eltern_pin || "1234"}" />
+    <label class="field-label">Sternenenergie für Freizeit-Freischaltung (pro Tag)</label>
+    <input type="number" id="ep-schwelle" value="${profil.freizeit_schwelle || 30}" />
+    <label class="field-label">Playlist-Link Morgenroutine (aus der Spotify-App kopiert)</label>
+    <input type="text" id="ep-playlist-morgen" value="${profil.morgen_playlist_link || ""}" placeholder="https://open.spotify.com/playlist/..." />
+    <label class="field-label">Playlist-Link Abendroutine</label>
+    <input type="text" id="ep-playlist-abend" value="${profil.abend_playlist_link || ""}" placeholder="https://open.spotify.com/playlist/..." />
+    <button class="btn-primary" onclick="elternProfilSpeichern()">Speichern</button>
+    <p id="ep-gespeichert" class="muted" style="display:none; margin-top:8px;">Gespeichert ✓</p>
+  `;
+  container.appendChild(card);
+
+  const hinweis = document.createElement("div"); hinweis.className = "hinweis-box";
+  hinweis.innerHTML = `<strong>Tipp fürs Tablet:</strong> Eine reine Web-App kann ein iPad nicht selbst sperren. Nutze dafür Einstellungen → Bedienungshilfen → Zugriffsführung (Seitentaste 3× drücken) — dann ist das Gerät auf diese App gesperrt, bis du den Code eingibst.`;
+  container.appendChild(hinweis);
+}
+async function elternProfilSpeichern() {
+  const patch = {
+    child_id: CHILD_ID,
+    heldenname: document.getElementById("ep-name").value.trim() || profil.heldenname,
+    eltern_pin: document.getElementById("ep-pin").value.trim() || "1234",
+    freizeit_schwelle: Number(document.getElementById("ep-schwelle").value) || 30,
+    morgen_playlist_link: document.getElementById("ep-playlist-morgen").value.trim() || null,
+    abend_playlist_link: document.getElementById("ep-playlist-abend").value.trim() || null,
+  };
+  await supabase.from("arcanova_profile").upsert(patch);
+  profil = { ...profil, ...patch };
+  document.getElementById("ep-gespeichert").style.display = "block";
+}
+
+function elternTabRoutine(typ) {
+  return function (container) {
+    const liste = typ === "morgen" ? morgenPunkte : abendPunkte;
+    const wrap = document.createElement("div");
+    wrap.innerHTML = `<p class="muted-light">${typ === "morgen" ? "Morgenroutine" : "Abendroutine"}-Punkte — Reihenfolge, Icon, Name. Ein Punkt vom Typ „Workout" öffnet das Wake-up-Workout statt eines einfachen Häkchens.</p>`;
+    const editorListe = document.createElement("div"); editorListe.className = "editor-liste";
+    liste.forEach((p, i) => {
+      const zeile = document.createElement("div"); zeile.className = "editor-zeile";
+      zeile.innerHTML = `
+        <input type="text" class="emoji-feld" value="${p.icon}" onchange="routinePunktFeldAendern('${p.id}','icon',this.value)" />
+        <input type="text" class="name-feld" value="${p.name}" onchange="routinePunktFeldAendern('${p.id}','name',this.value)" />
+        <div class="reorder">
+          <button onclick="routinePunktVerschieben('${typ}','${p.id}',-1)" ${i===0?"disabled":""}>▲</button>
+          <button onclick="routinePunktVerschieben('${typ}','${p.id}',1)" ${i===liste.length-1?"disabled":""}>▼</button>
+        </div>
+        <button class="btn-danger" onclick="routinePunktLoeschen('${typ}','${p.id}')">✕</button>
+      `;
+      editorListe.appendChild(zeile);
+    });
+    wrap.appendChild(editorListe);
+    const neu = document.createElement("div"); neu.className = "card";
+    neu.innerHTML = `
+      <label class="field-label">Neuer Punkt</label>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="rp-neu-icon-${typ}" placeholder="✅" style="width:56px;" maxlength="4" />
+        <input type="text" id="rp-neu-name-${typ}" placeholder="z. B. Brille aufsetzen" style="flex:1;" />
+      </div>
+      <button class="btn-secondary" style="margin-top:8px;" onclick="routinePunktHinzufuegen('${typ}')">+ Hinzufügen</button>
+    `;
+    wrap.appendChild(neu);
+    container.appendChild(wrap);
+  };
+}
+async function routinePunktFeldAendern(id, feld, wert) {
+  await supabase.from("arcanova_routine_punkte").update({ [feld]: wert }).eq("id", id);
+  const liste = morgenPunkte.find(p => p.id === id) ? morgenPunkte : abendPunkte;
+  const p = liste.find(x => x.id === id); if (p) p[feld] = wert;
+}
+async function routinePunktLoeschen(typ, id) {
+  await supabase.from("arcanova_routine_punkte").delete().eq("id", id);
+  if (typ === "morgen") morgenPunkte = morgenPunkte.filter(p => p.id !== id); else abendPunkte = abendPunkte.filter(p => p.id !== id);
+  elternTabWechseln(typ);
+}
+async function routinePunktVerschieben(typ, id, richtung) {
+  const liste = typ === "morgen" ? morgenPunkte : abendPunkte;
+  const idx = liste.findIndex(p => p.id === id);
+  const zielIdx = idx + richtung;
+  if (zielIdx < 0 || zielIdx >= liste.length) return;
+  [liste[idx], liste[zielIdx]] = [liste[zielIdx], liste[idx]];
+  await Promise.all(liste.map((p, i) => supabase.from("arcanova_routine_punkte").update({ reihenfolge: i }).eq("id", p.id)));
+  liste.forEach((p, i) => p.reihenfolge = i);
+  elternTabWechseln(typ);
+}
+async function routinePunktHinzufuegen(typ) {
+  const icon = document.getElementById(`rp-neu-icon-${typ}`).value.trim() || "✅";
+  const name = document.getElementById(`rp-neu-name-${typ}`).value.trim();
+  if (!name) return;
+  const liste = typ === "morgen" ? morgenPunkte : abendPunkte;
+  const { data, error } = await supabase.from("arcanova_routine_punkte").insert({ child_id: CHILD_ID, routine_typ: typ, typ: "checkbox", name, icon, reihenfolge: liste.length }).select().single();
+  if (error) { alert(error.message); return; }
+  liste.push(data);
+  elternTabWechseln(typ);
+}
+
+function elternTabWorkout(container) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<p class="muted-light">Übungen fürs Wake-up-Workout (morgens, Dauer in Sekunden je Übung).</p>`;
+  const editorListe = document.createElement("div"); editorListe.className = "editor-liste";
+  workoutUebungen.forEach((u, i) => {
+    const zeile = document.createElement("div"); zeile.className = "editor-zeile";
+    zeile.innerHTML = `
+      <input type="text" class="name-feld" value="${u.name}" onchange="workoutFeldAendern('${u.id}','name',this.value)" />
+      <input type="number" class="zahl-feld" value="${u.dauer_sek}" onchange="workoutFeldAendern('${u.id}','dauer_sek',Number(this.value))" />
+      <div class="reorder">
+        <button onclick="workoutVerschieben('${u.id}',-1)" ${i===0?"disabled":""}>▲</button>
+        <button onclick="workoutVerschieben('${u.id}',1)" ${i===workoutUebungen.length-1?"disabled":""}>▼</button>
+      </div>
+      <button class="btn-danger" onclick="workoutLoeschen('${u.id}')">✕</button>
+    `;
+    editorListe.appendChild(zeile);
+  });
+  wrap.appendChild(editorListe);
+  const neu = document.createElement("div"); neu.className = "card";
+  neu.innerHTML = `
+    <label class="field-label">Neue Übung</label>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="wu-neu-name" placeholder="z. B. Kniebeugen" style="flex:1;" />
+      <input type="number" id="wu-neu-dauer" placeholder="30" style="width:70px;" />
+    </div>
+    <button class="btn-secondary" style="margin-top:8px;" onclick="workoutHinzufuegen()">+ Hinzufügen</button>
+  `;
+  wrap.appendChild(neu);
+  container.appendChild(wrap);
+}
+async function workoutFeldAendern(id, feld, wert) {
+  await supabase.from("arcanova_workout_uebungen").update({ [feld]: wert }).eq("id", id);
+  const u = workoutUebungen.find(x => x.id === id); if (u) u[feld] = wert;
+}
+async function workoutLoeschen(id) { await supabase.from("arcanova_workout_uebungen").delete().eq("id", id); workoutUebungen = workoutUebungen.filter(u => u.id !== id); elternTabWechseln("workout"); }
+async function workoutVerschieben(id, richtung) {
+  const idx = workoutUebungen.findIndex(u => u.id === id); const zielIdx = idx + richtung;
+  if (zielIdx < 0 || zielIdx >= workoutUebungen.length) return;
+  [workoutUebungen[idx], workoutUebungen[zielIdx]] = [workoutUebungen[zielIdx], workoutUebungen[idx]];
+  await Promise.all(workoutUebungen.map((u, i) => supabase.from("arcanova_workout_uebungen").update({ reihenfolge: i }).eq("id", u.id)));
+  workoutUebungen.forEach((u, i) => u.reihenfolge = i);
+  elternTabWechseln("workout");
+}
+async function workoutHinzufuegen() {
+  const name = document.getElementById("wu-neu-name").value.trim();
+  const dauer = Number(document.getElementById("wu-neu-dauer").value) || 30;
+  if (!name) return;
+  const { data, error } = await supabase.from("arcanova_workout_uebungen").insert({ child_id: CHILD_ID, name, dauer_sek: dauer, reihenfolge: workoutUebungen.length }).select().single();
+  if (error) { alert(error.message); return; }
+  workoutUebungen.push(data);
+  elternTabWechseln("workout");
+}
+
+function elternTabWorkflow(container) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<p class="muted-light">Lernblöcke (z. B. "Hausaufgaben", "Lesen üben") mit eigenen Arbeits-/Pausenzeiten.</p>`;
+  const editorListe = document.createElement("div"); editorListe.className = "editor-liste";
+  workflowPresets.forEach(p => {
+    const zeile = document.createElement("div"); zeile.className = "card"; zeile.style.marginBottom = "8px";
+    zeile.innerHTML = `
+      <label class="field-label">Name</label>
+      <input type="text" value="${p.name}" onchange="workflowFeldAendern('${p.id}','name',this.value)" />
+      <div style="display:flex; gap:8px;">
+        <div style="flex:1;"><label class="field-label">Arbeit (Min.)</label><input type="number" value="${p.arbeit_min}" onchange="workflowFeldAendern('${p.id}','arbeit_min',Number(this.value))" /></div>
+        <div style="flex:1;"><label class="field-label">Pause (Min.)</label><input type="number" value="${p.pause_min}" onchange="workflowFeldAendern('${p.id}','pause_min',Number(this.value))" /></div>
+        <div style="flex:1;"><label class="field-label">Gesamt (Min.)</label><input type="number" value="${p.gesamt_min}" onchange="workflowFeldAendern('${p.id}','gesamt_min',Number(this.value))" /></div>
+      </div>
+      <label class="field-label">Playlist-Link (optional)</label>
+      <input type="text" value="${p.playlist_link || ""}" placeholder="https://open.spotify.com/playlist/..." onchange="workflowFeldAendern('${p.id}','playlist_link',this.value)" />
+      <button class="btn-danger" onclick="workflowLoeschen('${p.id}')">Löschen</button>
+    `;
+    editorListe.appendChild(zeile);
+  });
+  wrap.appendChild(editorListe);
+  const neu = document.createElement("div"); neu.className = "card";
+  neu.innerHTML = `<label class="field-label">Neuer Lernblock</label><input type="text" id="wf-neu-name" placeholder="z. B. Mathe üben" />
+    <button class="btn-secondary" onclick="workflowHinzufuegen()">+ Hinzufügen</button>`;
+  wrap.appendChild(neu);
+  container.appendChild(wrap);
+}
+async function workflowFeldAendern(id, feld, wert) {
+  await supabase.from("arcanova_workflow_presets").update({ [feld]: wert }).eq("id", id);
+  const p = workflowPresets.find(x => x.id === id); if (p) p[feld] = wert;
+}
+async function workflowLoeschen(id) { await supabase.from("arcanova_workflow_presets").delete().eq("id", id); workflowPresets = workflowPresets.filter(p => p.id !== id); elternTabWechseln("workflow"); }
+async function workflowHinzufuegen() {
+  const name = document.getElementById("wf-neu-name").value.trim(); if (!name) return;
+  const { data, error } = await supabase.from("arcanova_workflow_presets").insert({ child_id: CHILD_ID, name, arbeit_min: 15, pause_min: 5, gesamt_min: 45, reihenfolge: workflowPresets.length }).select().single();
+  if (error) { alert(error.message); return; }
+  workflowPresets.push(data);
+  elternTabWechseln("workflow");
+}
+
+function elternTabFreizeit(container) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<p class="muted-light">Apps/Links, die im freigeschalteten Freizeitbereich erscheinen (z. B. YouTube Kids).</p>`;
+  const editorListe = document.createElement("div"); editorListe.className = "editor-liste";
+  freizeitApps.forEach(a => {
+    const zeile = document.createElement("div"); zeile.className = "card"; zeile.style.marginBottom = "8px";
+    zeile.innerHTML = `
+      <div style="display:flex; gap:8px;">
+        <input type="text" value="${a.icon}" style="width:56px;" maxlength="4" onchange="freizeitFeldAendern('${a.id}','icon',this.value)" />
+        <input type="text" value="${a.name}" style="flex:1;" onchange="freizeitFeldAendern('${a.id}','name',this.value)" />
+      </div>
+      <label class="field-label">Link</label>
+      <input type="text" value="${a.link}" onchange="freizeitFeldAendern('${a.id}','link',this.value)" />
+      <button class="btn-danger" onclick="freizeitLoeschen('${a.id}')">Löschen</button>
+    `;
+    editorListe.appendChild(zeile);
+  });
+  wrap.appendChild(editorListe);
+  const neu = document.createElement("div"); neu.className = "card";
+  neu.innerHTML = `<label class="field-label">Neue App</label>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="fa-neu-icon" placeholder="🎬" style="width:56px;" maxlength="4" />
+      <input type="text" id="fa-neu-name" placeholder="YouTube Kids" style="flex:1;" />
+    </div>
+    <input type="text" id="fa-neu-link" placeholder="https://..." style="margin-top:8px;" />
+    <button class="btn-secondary" onclick="freizeitHinzufuegen()">+ Hinzufügen</button>`;
+  wrap.appendChild(neu);
+  container.appendChild(wrap);
+}
+async function freizeitFeldAendern(id, feld, wert) {
+  await supabase.from("arcanova_freizeit_apps").update({ [feld]: wert }).eq("id", id);
+  const a = freizeitApps.find(x => x.id === id); if (a) a[feld] = wert;
+}
+async function freizeitLoeschen(id) { await supabase.from("arcanova_freizeit_apps").delete().eq("id", id); freizeitApps = freizeitApps.filter(a => a.id !== id); elternTabWechseln("freizeit"); }
+async function freizeitHinzufuegen() {
+  const icon = document.getElementById("fa-neu-icon").value.trim() || "🎮";
+  const name = document.getElementById("fa-neu-name").value.trim();
+  const link = document.getElementById("fa-neu-link").value.trim();
+  if (!name || !link) return;
+  const { data, error } = await supabase.from("arcanova_freizeit_apps").insert({ child_id: CHILD_ID, name, icon, link, reihenfolge: freizeitApps.length }).select().single();
+  if (error) { alert(error.message); return; }
+  freizeitApps.push(data);
+  elternTabWechseln("freizeit");
+}
+
+async function elternTabVerlauf(container) {
+  container.innerHTML = '<p class="muted-light">Lade Verlauf…</p>';
+  const seitTage = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+  const [{ data: rlog }, { data: wflog }] = await Promise.all([
+    supabase.from("arcanova_routine_log").select("*, arcanova_routine_punkte(name, icon, routine_typ)").eq("child_id", CHILD_ID).gte("datum", seitTage).order("erstellt_am", { ascending: false }),
+    supabase.from("arcanova_workflow_log").select("*").eq("child_id", CHILD_ID).gte("datum", seitTage).order("erstellt_am", { ascending: false }),
+  ]);
+  const eintraege = [
+    ...(rlog || []).map(r => ({ zeit: r.erstellt_am, text: `${r.arcanova_routine_punkte?.icon || ""} ${r.arcanova_routine_punkte?.name || "Routine-Punkt"} (${r.arcanova_routine_punkte?.routine_typ === "morgen" ? "morgens" : "abends"})` })),
+    ...(wflog || []).map(w => ({ zeit: w.erstellt_am, text: `📖 Lernblock „${w.preset_name || "?"}" abgeschlossen` })),
+  ].sort((a, b) => new Date(b.zeit) - new Date(a.zeit));
+
+  const card = document.createElement("div"); card.className = "card";
+  if (eintraege.length === 0) { card.innerHTML = '<p class="muted">Noch keine Einträge in den letzten 7 Tagen.</p>'; }
+  else {
+    card.innerHTML = eintraege.map(e => `<div class="verlauf-eintrag"><span>${e.text}</span><span class="muted">${new Date(e.zeit).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></div>`).join("");
+  }
+  container.innerHTML = "";
+  container.appendChild(card);
+}
+
+// -------------------- Start --------------------
+(async () => { await homeAktualisieren(); if (profil && profil.onboarding_done) gehe("screen-home"); })();
+</script>
+</body>
+</html>
