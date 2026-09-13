@@ -98,6 +98,16 @@
   .verlauf-eintrag { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:13px; }
   .verlauf-eintrag:last-child { border-bottom:none; }
 
+  .belohnung-zeile { background:#fff; border-radius:14px; padding:14px 16px; display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+  .belohnung-zeile .icon { font-size:26px; }
+  .belohnung-zeile .info { flex:1; }
+  .belohnung-zeile .name { font-weight:700; font-size:15px; color:var(--text-dark); }
+  .belohnung-zeile .kosten { font-size:12.5px; color:#b8860b; font-weight:700; margin-top:2px; }
+  .belohnung-zeile .btn-secondary:disabled { opacity:0.4; cursor:default; }
+  .abholen-zeile { background:#f8f6ff; border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .abholen-zeile .info { flex:1; font-size:13.5px; }
+  .abholen-zeile .info .name { font-weight:700; color:var(--text-dark); }
+
   .reaktion-screen { text-align:center; }
   .stern-gewinn { font-size:20px; font-weight:800; color:var(--star); margin:10px 0 18px; }
   .kleingedrucktes { text-align:center; color:rgba(255,255,255,0.35); font-size:11px; margin-top:auto; padding-top:18px; }
@@ -172,6 +182,16 @@
       <span class="pfeil">›</span>
     </button>
 
+    <h3>Belohnungen</h3>
+    <button class="block-karte" onclick="shopOeffnen()">
+      <span class="icon">🏆</span>
+      <span class="info">
+        <span class="name">Belohnungs-Shop</span>
+        <span class="status">✨ <span id="shop-guthaben-status"></span> zum Einlösen</span>
+      </span>
+      <span class="pfeil">›</span>
+    </button>
+
     <button class="btn-ghost" style="margin-top:8px;" onclick="elternPinOeffnen()">Für Eltern</button>
   </div>
 
@@ -238,6 +258,16 @@
     <div class="app-kachel-grid" id="freizeit-app-grid"></div>
   </div>
 
+  <!-- ============ BELOHNUNGS-SHOP ============ -->
+  <div class="screen" id="screen-shop">
+    <a class="back-link" onclick="gehe('screen-home'); homeAktualisieren();">‹ Zurück</a>
+    <div class="top-bar" style="padding-top:0;">
+      <h2 style="margin:0;">Belohnungs-Shop 🏆</h2>
+      <div class="sternenenergie-badge">✨ <span id="shop-guthaben"></span></div>
+    </div>
+    <div class="routine-liste" id="shop-liste"></div>
+  </div>
+
   <!-- ============ ELTERN: PIN ============ -->
   <div class="screen" id="screen-eltern-pin">
     <a class="back-link" onclick="gehe('screen-home');">‹ Zurück</a>
@@ -288,6 +318,7 @@ let abendPunkte = [];
 let workoutUebungen = [];
 let workflowPresets = [];
 let freizeitApps = [];
+let rewardCatalog = [];
 let heutigeRoutineLogIds = new Set(); // punkt_id, für heute erledigt
 let heutigeWorkflowSessions = 0;
 let heuteGesammelteSterne = 0;
@@ -327,7 +358,7 @@ async function allesLaden() {
 
   const heute = heuteDatum();
   const [
-    { data: f }, { data: mp }, { data: ap }, { data: we }, { data: wp }, { data: fa },
+    { data: f }, { data: mp }, { data: ap }, { data: we }, { data: wp }, { data: fa }, { data: rc },
     { data: rlog }, { data: wflog },
   ] = await Promise.all([
     supabase.from("arcanova_fortschritt").select("*").eq("child_id", CHILD_ID).maybeSingle(),
@@ -336,6 +367,7 @@ async function allesLaden() {
     supabase.from("arcanova_workout_uebungen").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
     supabase.from("arcanova_workflow_presets").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
     supabase.from("arcanova_freizeit_apps").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
+    supabase.from("arcanova_reward_catalog").select("*").eq("child_id", CHILD_ID).eq("aktiv", true).order("reihenfolge"),
     supabase.from("arcanova_routine_log").select("punkt_id").eq("child_id", CHILD_ID).eq("datum", heute),
     supabase.from("arcanova_workflow_log").select("id").eq("child_id", CHILD_ID).eq("datum", heute),
   ]);
@@ -346,6 +378,7 @@ async function allesLaden() {
   workoutUebungen = we || [];
   workflowPresets = wp || [];
   freizeitApps = fa || [];
+  rewardCatalog = rc || [];
   heutigeRoutineLogIds = new Set((rlog || []).map(r => r.punkt_id));
   heutigeWorkflowSessions = (wflog || []).length;
   heuteGesammelteSterne = heutigeRoutineLogIds.size * STERNE_PRO_PUNKT + heutigeWorkflowSessions * STERNE_PRO_WORKFLOW_SESSION;
@@ -381,6 +414,8 @@ async function homeAktualisieren() {
   const frei = heuteGesammelteSterne >= schwelle;
   document.getElementById("freizeit-icon").textContent = frei ? "🎮" : "🔒";
   document.getElementById("freizeit-status").textContent = frei ? "Freigeschaltet!" : `Noch ${Math.max(0, schwelle - heuteGesammelteSterne)} ✨ bis Freizeit`;
+
+  document.getElementById("shop-guthaben-status").textContent = fortschritt.sternenenergie || 0;
 }
 
 // -------------------- Routine (Morgen/Abend) --------------------
@@ -429,7 +464,7 @@ async function routinePunktAbschliessen(punkt) {
 function reaktionZeigen(titel, text, sterne, weiterCallback, playlistLink) {
   document.getElementById("reaktion-titel").textContent = titel;
   document.getElementById("reaktion-text").textContent = text;
-  document.getElementById("reaktion-sterne").textContent = `+${sterne} ✨`;
+  document.getElementById("reaktion-sterne").textContent = `${sterne >= 0 ? "+" : ""}${sterne} ✨`;
   const weiterBtn = document.querySelector("#screen-reaktion .btn-primary");
   weiterBtn.onclick = () => { (weiterCallback || (() => gehe("screen-home")))(); };
   gehe("screen-reaktion");
@@ -540,6 +575,48 @@ function freizeitOeffnen() {
   }
 }
 
+// -------------------- Belohnungs-Shop --------------------
+function shopOeffnen() {
+  document.getElementById("shop-guthaben").textContent = fortschritt.sternenenergie || 0;
+  shopRendern();
+  gehe("screen-shop");
+}
+function shopRendern() {
+  const liste = document.getElementById("shop-liste");
+  liste.innerHTML = "";
+  document.getElementById("shop-guthaben").textContent = fortschritt.sternenenergie || 0;
+  if (rewardCatalog.length === 0) {
+    liste.innerHTML = '<p class="muted-light">Noch keine Prämien eingerichtet — das können Eltern im Eltern-Bereich tun.</p>';
+    return;
+  }
+  rewardCatalog.forEach(r => {
+    const leistbar = (fortschritt.sternenenergie || 0) >= r.kosten;
+    const zeile = document.createElement("div"); zeile.className = "belohnung-zeile";
+    zeile.innerHTML = `
+      <span class="icon">${r.icon}</span>
+      <span class="info">
+        <span class="name">${r.name}</span>
+        <div class="kosten">✨ ${r.kosten}</div>
+      </span>
+      <button class="btn-secondary" ${leistbar ? "" : "disabled"}>Einlösen</button>
+    `;
+    zeile.querySelector("button").onclick = () => belohnungEinloesen(r);
+    liste.appendChild(zeile);
+  });
+}
+async function belohnungEinloesen(reward) {
+  if ((fortschritt.sternenenergie || 0) < reward.kosten) return;
+  if (!confirm(`${reward.name} für ✨ ${reward.kosten} einlösen?`)) return;
+  const neueSterne = (fortschritt.sternenenergie || 0) - reward.kosten;
+  const { error } = await supabase.from("arcanova_redemptions").insert({
+    child_id: CHILD_ID, reward_id: reward.id, reward_name: reward.name, reward_icon: reward.icon, kosten: reward.kosten,
+  });
+  if (error) { alert("Einlösen fehlgeschlagen: " + error.message); return; }
+  await supabase.from("arcanova_fortschritt").upsert({ child_id: CHILD_ID, sternenenergie: neueSterne, missionen_gesamt: fortschritt.missionen_gesamt });
+  fortschritt.sternenenergie = neueSterne;
+  reaktionZeigen(`${reward.name} — eingelöst!`, "Zeig das gleich deinen Eltern.", -reward.kosten, () => { gehe("screen-shop"); shopRendern(); });
+}
+
 // -------------------- Eltern-Bereich --------------------
 function elternPinOeffnen() { document.getElementById("input-eltern-pin").value = ""; document.getElementById("eltern-pin-fehler").style.display = "none"; gehe("screen-eltern-pin"); }
 function elternPinPruefen() {
@@ -555,6 +632,7 @@ const ELTERN_TABS = [
   { id: "workout", label: "Workout" },
   { id: "workflow", label: "Lernblock" },
   { id: "freizeit", label: "Freizeit" },
+  { id: "shop", label: "Belohnungen" },
   { id: "verlauf", label: "Verlauf" },
 ];
 let elternAktiverTab = "profil";
@@ -575,7 +653,7 @@ function elternTabWechseln(tabId) {
   const inhalt = document.getElementById("eltern-tab-inhalt");
   inhalt.innerHTML = "";
   ({ profil: elternTabProfil, morgen: elternTabRoutine("morgen"), abend: elternTabRoutine("abend"),
-     workout: elternTabWorkout, workflow: elternTabWorkflow, freizeit: elternTabFreizeit, verlauf: elternTabVerlauf })[tabId](inhalt);
+     workout: elternTabWorkout, workflow: elternTabWorkflow, freizeit: elternTabFreizeit, shop: elternTabShop, verlauf: elternTabVerlauf })[tabId](inhalt);
 }
 
 function elternTabProfil(container) {
@@ -814,6 +892,79 @@ async function freizeitHinzufuegen() {
   if (error) { alert(error.message); return; }
   freizeitApps.push(data);
   elternTabWechseln("freizeit");
+}
+
+async function elternTabShop(container) {
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `<p class="muted-light">Prämien, die dein Kind sich für gesammelte Sternenenergie kaufen kann (Kosten frei wählbar).</p>`;
+  const editorListe = document.createElement("div"); editorListe.className = "editor-liste";
+  rewardCatalog.forEach(r => {
+    const zeile = document.createElement("div"); zeile.className = "editor-zeile";
+    zeile.innerHTML = `
+      <input type="text" class="emoji-feld" value="${r.icon}" onchange="rewardFeldAendern('${r.id}','icon',this.value)" />
+      <input type="text" class="name-feld" value="${r.name}" onchange="rewardFeldAendern('${r.id}','name',this.value)" />
+      <input type="number" class="zahl-feld" value="${r.kosten}" min="1" onchange="rewardFeldAendern('${r.id}','kosten',Math.max(1,Number(this.value)||1))" />
+      <button class="btn-danger" onclick="rewardLoeschen('${r.id}')">✕</button>
+    `;
+    editorListe.appendChild(zeile);
+  });
+  wrap.appendChild(editorListe);
+  const neu = document.createElement("div"); neu.className = "card";
+  neu.innerHTML = `
+    <label class="field-label">Neue Prämie</label>
+    <div style="display:flex; gap:8px;">
+      <input type="text" id="rw-neu-icon" placeholder="🎁" style="width:56px;" maxlength="4" />
+      <input type="text" id="rw-neu-name" placeholder="z. B. Kino-Abend" style="flex:1;" />
+      <input type="number" id="rw-neu-kosten" placeholder="20" style="width:70px;" min="1" />
+    </div>
+    <button class="btn-secondary" style="margin-top:8px;" onclick="rewardHinzufuegen()">+ Hinzufügen</button>
+  `;
+  wrap.appendChild(neu);
+  container.appendChild(wrap);
+
+  const abholCard = document.createElement("div"); abholCard.className = "card";
+  abholCard.innerHTML = '<p class="muted">Lade offene Prämien…</p>';
+  container.appendChild(abholCard);
+  const { data: offene } = await supabase.from("arcanova_redemptions").select("*").eq("child_id", CHILD_ID).eq("abgeholt", false).order("eingeloest_am", { ascending: false });
+  abholCard.innerHTML = "";
+  const titel = document.createElement("h3"); titel.className = "dark"; titel.textContent = "Noch auszuhändigen";
+  abholCard.appendChild(titel);
+  if (!offene || offene.length === 0) {
+    abholCard.insertAdjacentHTML("beforeend", '<p class="muted">Nichts offen.</p>');
+  } else {
+    offene.forEach(o => {
+      const zeile = document.createElement("div"); zeile.className = "abholen-zeile";
+      zeile.innerHTML = `
+        <span class="icon">${o.reward_icon}</span>
+        <span class="info"><span class="name">${o.reward_name}</span><br/><span class="muted">✨ ${o.kosten} · ${new Date(o.eingeloest_am).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span></span>
+        <button class="btn-secondary" onclick="redemptionAlsAbgeholtMarkieren('${o.id}')">Übergeben ✓</button>
+      `;
+      abholCard.appendChild(zeile);
+    });
+  }
+}
+async function rewardFeldAendern(id, feld, wert) {
+  await supabase.from("arcanova_reward_catalog").update({ [feld]: wert }).eq("id", id);
+  const r = rewardCatalog.find(x => x.id === id); if (r) r[feld] = wert;
+}
+async function rewardLoeschen(id) {
+  await supabase.from("arcanova_reward_catalog").delete().eq("id", id);
+  rewardCatalog = rewardCatalog.filter(r => r.id !== id);
+  elternTabWechseln("shop");
+}
+async function rewardHinzufuegen() {
+  const icon = document.getElementById("rw-neu-icon").value.trim() || "🎁";
+  const name = document.getElementById("rw-neu-name").value.trim();
+  const kosten = Math.max(1, Number(document.getElementById("rw-neu-kosten").value) || 20);
+  if (!name) return;
+  const { data, error } = await supabase.from("arcanova_reward_catalog").insert({ child_id: CHILD_ID, name, icon, kosten, reihenfolge: rewardCatalog.length }).select().single();
+  if (error) { alert(error.message); return; }
+  rewardCatalog.push(data);
+  elternTabWechseln("shop");
+}
+async function redemptionAlsAbgeholtMarkieren(id) {
+  await supabase.from("arcanova_redemptions").update({ abgeholt: true }).eq("id", id);
+  elternTabWechseln("shop");
 }
 
 async function elternTabVerlauf(container) {
